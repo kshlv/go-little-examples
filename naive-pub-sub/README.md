@@ -27,4 +27,7 @@ type MessageBroker interface {
 }
 ```
 
-Even if it is barely workable, it gives a nice and easy to grasp intuition about PubSub.
+Even if it is just a toy and is barely workable, it gives an intuition about PubSub.
+
+All glory goes to Eli Bendersky and his article: https://eli.thegreenplace.net/2020/pubsub-using-channels-in-go
+I just walked through with it and added some tests.
