@@ -37,46 +37,80 @@ var sigs = []os.Signal{
 	syscall.SIGINFO,
 }
 
+func talk(talkChan chan string, msg string) {
+	go func(ch chan string, msg string) {
+		ch <- msg
+	}(talkChan, msg)
+}
+
 func listenSignals(
 	sigsChan chan os.Signal,
-	done chan bool,
-	kill chan bool,
-	start chan bool,
+	stopApp chan bool,
+	stopSomething chan bool,
+	startWorker chan bool,
+	talkChan chan string,
 ) {
+	talk(talkChan, "start listening\n")
 	func() {
 		for {
 			s := <-sigsChan
 			switch s {
 			case syscall.SIGINT:
-				fmt.Println("[SIGINT]")
-				kill <- true
+				talk(talkChan, "[SIGINT]\n")
+				stopSomething <- true
 			case syscall.SIGQUIT:
-				fmt.Println("[SIGQUIT]")
-				start <- true
+				talk(talkChan, "[SIGQUIT]\n")
+				startWorker <- true
 			case syscall.SIGTSTP:
-				fmt.Println("[SIGTSTP] congrats, you've found your way out of it")
-				done <- true
+				talk(talkChan, "[SIGTSTP] congrats, you've found your way out of it\n")
+				stopApp <- true
 			case syscall.SIGINFO:
-				fmt.Printf(greeting, os.Getpid())
-			default:
-				fmt.Println("unexpected signal, here's what i've got:", s)
+				talk(talkChan, fmt.Sprintf(greeting, os.Getpid()))
 			}
 		}
 	}()
 }
 
-func work(id int, kill chan bool) {
+func work(id int, stopWorker chan bool, talk chan string) {
 	count := 0
 
 	for {
 		select {
-		case <-kill:
-			fmt.Printf("[STOP] worker %v\n", id)
+		case <-stopWorker:
+			go func(ch chan string) { ch <- fmt.Sprintf("[STOP] worker %v\n", id) }(talk)
 			return
 		default:
-			fmt.Printf("[WORK] worker %v worked %v times\n", id, count)
+			go func(ch chan string) { ch <- fmt.Sprintf("[WORK] worker %v worked %v times\n", id, count) }(talk)
 			count++
 			time.Sleep(time.Second)
+		}
+	}
+}
+
+func coordinate(stopApp chan bool, startWorker chan bool, stopSomething chan bool, talkChan chan string) {
+	stopWorker := make(chan bool)
+
+	workerSeries := 0
+	runningWorkers := 0
+
+	for {
+		select {
+		case <-startWorker:
+			talk(talkChan, "[START] starting a new worker\n")
+			go work(workerSeries, stopWorker, talkChan)
+			runningWorkers++
+			workerSeries++
+		case <-stopSomething:
+			if runningWorkers == 0 {
+				talk(talkChan, "[INFO] no running workers to kill\n")
+				go func(ch chan bool) {
+					ch <- true
+				}(stopApp)
+				break
+			}
+			talk(talkChan, "[STOP] stop one of workers\n")
+			stopWorker <- true
+			runningWorkers--
 		}
 	}
 }
@@ -84,40 +118,26 @@ func work(id int, kill chan bool) {
 func main() {
 	sigsChan := make(chan os.Signal)
 
-	shutApp := make(chan bool)
-	shutSomething := make(chan bool)
+	stopApp := make(chan bool)
+	stopSomething := make(chan bool)
 	startWorker := make(chan bool)
-	shutWorker := make(chan bool)
-
-	workerSeries := 0
-	runningWorkers := 0
+	talk := make(chan string)
 
 	fmt.Printf(greeting, os.Getpid())
 
 	signal.Notify(sigsChan, sigs...)
-	go listenSignals(sigsChan, shutApp, shutSomething, startWorker)
+	go listenSignals(sigsChan, stopApp, stopSomething, startWorker, talk)
+	go coordinate(stopApp, startWorker, stopSomething, talk)
 
-	for {
-		select {
-		case <-shutApp:
-			fmt.Println("[EXIT] exiting")
-			return
-		case <-startWorker:
-			fmt.Println("[START] starting a new worker")
-			go work(workerSeries, shutWorker)
-			runningWorkers++
-			workerSeries++
-		case <-shutSomething:
-			if runningWorkers == 0 {
-				fmt.Println("[INFO] no running workers to kill")
-				go func(ch chan bool) {
-					ch <- true
-				}(shutApp)
-				break
-			}
-			fmt.Println("[STOP] stop one of workers")
-			shutWorker <- true
-			runningWorkers--
+	go func(talkChan chan string) {
+		var s string
+		for {
+			s = <-talkChan
+			fmt.Print(s)
 		}
-	}
+	}(talk)
+
+	<-stopApp
+	fmt.Println("[EXIT] exiting")
+	return
 }
