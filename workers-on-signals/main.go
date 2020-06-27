@@ -37,19 +37,15 @@ var sigs = []os.Signal{
 	syscall.SIGINFO,
 }
 
+// Well, DUH, printing something with a helper function like this is a travesty.
+// But, first, this is just a home project and, second, we can write tests for it alright.
 func talk(talkChan chan string, msg string) {
 	go func(ch chan string, msg string) {
 		ch <- msg
 	}(talkChan, msg)
 }
 
-func listenSignals(
-	sigsChan chan os.Signal,
-	stopApp chan bool,
-	stopSomething chan bool,
-	startWorker chan bool,
-	talkChan chan string,
-) {
+func listenSignals(sigsChan chan os.Signal, stopApp chan bool, stopSomething chan bool, startWorker chan bool, talkChan chan string) {
 	talk(talkChan, "start listening\n")
 	func() {
 		for {
@@ -71,16 +67,16 @@ func listenSignals(
 	}()
 }
 
-func work(id int, stopWorker chan bool, talk chan string) {
+func work(id int, stopWorker chan bool, talkChan chan string) {
 	count := 0
 
 	for {
 		select {
 		case <-stopWorker:
-			go func(ch chan string) { ch <- fmt.Sprintf("[STOP] worker %v\n", id) }(talk)
+			go func(ch chan string) { ch <- fmt.Sprintf("[STOP] worker %v\n", id) }(talkChan)
 			return
 		default:
-			go func(ch chan string) { ch <- fmt.Sprintf("[WORK] worker %v worked %v times\n", id, count) }(talk)
+			go func(ch chan string) { ch <- fmt.Sprintf("[WORK] worker %v worked %v times\n", id, count) }(talkChan)
 			count++
 			time.Sleep(time.Second)
 		}
@@ -121,13 +117,13 @@ func main() {
 	stopApp := make(chan bool)
 	stopSomething := make(chan bool)
 	startWorker := make(chan bool)
-	talk := make(chan string)
+	talkChan := make(chan string)
 
 	fmt.Printf(greeting, os.Getpid())
 
 	signal.Notify(sigsChan, sigs...)
-	go listenSignals(sigsChan, stopApp, stopSomething, startWorker, talk)
-	go coordinate(stopApp, startWorker, stopSomething, talk)
+	go listenSignals(sigsChan, stopApp, stopSomething, startWorker, talkChan)
+	go coordinate(stopApp, startWorker, stopSomething, talkChan)
 
 	go func(talkChan chan string) {
 		var s string
@@ -135,9 +131,9 @@ func main() {
 			s = <-talkChan
 			fmt.Print(s)
 		}
-	}(talk)
+	}(talkChan)
 
 	<-stopApp
-	fmt.Println("[EXIT] exiting")
+	talk(talkChan, "[EXIT] exiting")
 	return
 }
