@@ -20,13 +20,13 @@ Or just read
 	man signal
 	man kill
 
-The point of this program is that you can manually handle just about ANY syscall.Signal (not syscall.SIGKILL) without you program broke. And do whatever you like to do with them.
+The point of this program is that you can manually handle just about ANY syscall.Signal (syscall.SIGKILL and syscall.SIGSTOP are the exceptions) without your program broke. And do whatever you like to do with them.
 
 Use
 	SIGQUIT  (Ctrl+\) for creating a worker
 	SIGINT   (Ctrl+C) for stopping a worker
 	SIGTSTP  (Ctrl+Z) for exiting the program
-	SIGINFO  (Ctrl+T) prints this help
+	SIGINFO  (Ctrl+T) for getting help
 
 `
 

@@ -9,15 +9,6 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-func makeListenerChans() (chan os.Signal, chan bool, chan bool, chan bool, chan string) {
-	sigsChan := make(chan os.Signal)
-	stopApp := make(chan bool)
-	stopSomething := make(chan bool)
-	startWorker := make(chan bool)
-	talk := make(chan string)
-	return sigsChan, stopApp, stopSomething, startWorker, talk
-}
-
 func sendSignal(ch chan os.Signal, sig os.Signal) {
 	go func(ch chan os.Signal, sig os.Signal) {
 		ch <- sig
@@ -25,7 +16,11 @@ func sendSignal(ch chan os.Signal, sig os.Signal) {
 }
 
 func TestListenSignals(t *testing.T) {
-	sigsChan, stopApp, stopSomething, startWorker, talk := makeListenerChans()
+	sigsChan := make(chan os.Signal)
+	stopApp := make(chan bool)
+	stopSomething := make(chan bool)
+	startWorker := make(chan bool)
+	talk := make(chan string)
 
 	go listenSignals(sigsChan, stopApp, stopSomething, startWorker, talk)
 	s := <-talk
